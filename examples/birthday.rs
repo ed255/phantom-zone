@@ -1,6 +1,7 @@
 use itertools::Itertools;
 use phantom_zone::*;
 use rand::{thread_rng, RngCore};
+use rayon::prelude::*;
 use std::array;
 
 const YEAR_ZERO: usize = 1900;
@@ -55,19 +56,13 @@ fn birthday_match(
     date_id_b: &[bool; DATE_ID_BITS],
     data_b: &[bool; DATA_BITS],
 ) -> ([bool; DATA_BITS], [bool; DATA_BITS]) {
-    println!("DBG data_a: {:?}", data_a);
-    println!("DBG data_b: {:?}", data_b);
-    println!("DBG date_id_a: {:?}", date_id_a);
-    println!("DBG date_id_b: {:?}", date_id_b);
     let not_is_match = date_id_a
         .iter()
         .zip(date_id_b.iter())
         .map(|(bit_a, bit_b)| bit_a ^ bit_b)
         .reduce(|acc, r| &acc | &r)
         .unwrap();
-    println!("DBG not_is_match: {:?}", not_is_match);
     let is_match = !&not_is_match;
-    println!("DBG is_match: {:?}", is_match);
     let masked_data_a = array::from_fn(|i| &data_a[i] & &is_match);
     let masked_data_b = array::from_fn(|i| &data_b[i] & &is_match);
     (masked_data_a, masked_data_b)
@@ -89,6 +84,46 @@ fn birthday_match_fhe(
     let masked_data_a = array::from_fn(|i| &data_a[i] & &is_match);
     let masked_data_b = array::from_fn(|i| &data_b[i] & &is_match);
     (masked_data_a, masked_data_b)
+}
+
+fn birthday_match_fhe_par(
+    date_id_a: &[FheBool; DATE_ID_BITS],
+    data_a: &[FheBool; DATA_BITS],
+    date_id_b: &[FheBool; DATE_ID_BITS],
+    data_b: &[FheBool; DATA_BITS],
+) -> ([FheBool; DATA_BITS], [FheBool; DATA_BITS]) {
+    rayon::ThreadPoolBuilder::new()
+        .build_scoped(
+            // Initialize thread-local storage parameters
+            |thread| {
+                set_parameter_set(ParameterSelector::NonInteractiveLTE2Party);
+                thread.run()
+            },
+            // Run parallel code under this pool
+            |pool| pool.install(|| _birthday_match_fhe_par(date_id_a, data_a, date_id_b, data_b)),
+        )
+        .unwrap()
+}
+
+fn _birthday_match_fhe_par(
+    date_id_a: &[FheBool; DATE_ID_BITS],
+    data_a: &[FheBool; DATA_BITS],
+    date_id_b: &[FheBool; DATE_ID_BITS],
+    data_b: &[FheBool; DATA_BITS],
+) -> ([FheBool; DATA_BITS], [FheBool; DATA_BITS]) {
+    let not_is_match = date_id_a
+        .par_iter()
+        .zip(date_id_b.par_iter())
+        .map(|(bit_a, bit_b)| bit_a ^ bit_b)
+        .reduce_with(|acc, r| &acc | &r)
+        .unwrap();
+    let is_match = !&not_is_match;
+    let masked_data_a: Vec<_> = data_a.par_iter().map(|byte| byte & &is_match).collect();
+    let masked_data_b: Vec<_> = data_b.par_iter().map(|byte| byte & &is_match).collect();
+    (
+        masked_data_a.try_into().unwrap_or_else(|_| panic!()),
+        masked_data_b.try_into().unwrap_or_else(|_| panic!()),
+    )
 }
 
 fn main() {
@@ -220,7 +255,7 @@ fn main() {
     let (cts_date_id_a, cts_data_a) = cts_a.as_slice().split_at(DATE_ID_BITS);
     let (cts_date_id_b, cts_data_b) = cts_b.as_slice().split_at(DATE_ID_BITS);
     let now = std::time::Instant::now();
-    let cts_out = birthday_match_fhe(
+    let cts_out = birthday_match_fhe_par(
         cts_date_id_a.try_into().unwrap(),
         cts_data_a.try_into().unwrap(),
         cts_date_id_b.try_into().unwrap(),
