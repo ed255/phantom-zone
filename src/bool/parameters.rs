@@ -392,7 +392,7 @@ impl AsRef<usize> for DecompositionCount {
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct LweDimension(pub(crate) usize);
 #[derive(Clone, Copy, PartialEq)]
-pub(crate) struct PolynomialSize(pub(crate) usize);
+pub(crate) struct PolynomialSize(pub usize);
 #[derive(Clone, Copy, PartialEq, Debug)]
 
 /// T equals modulus when modulus is non-native. Otherwise T equals 0. bool is
