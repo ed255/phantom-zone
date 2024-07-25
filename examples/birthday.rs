@@ -145,9 +145,9 @@ fn main() {
     let ck_b = &cks[1];
 
     let date_a = (1989, 03, 25);
-    let data_a = 0x1234;
+    let data_a = 0xcafe;
     let date_b = (1989, 03, 26);
-    let data_b = 0x5678;
+    let data_b = 0xbeef;
 
     let date_id_a = date_to_id(date_a.0, date_a.1, date_a.2);
     let date_id_b = date_to_id(date_b.0, date_b.1, date_b.2);
